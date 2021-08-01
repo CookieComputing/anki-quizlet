@@ -22,22 +22,25 @@ class Flashcard:
         self.back = back
 
 
-def scrape_quizlet_flashcards(url: str) -> List[Flashcard]:
+def scrape_quizlet_flashcards(url: str, username: str, password: str) -> List[Flashcard]:
     """
     Retrieves a list of flashcards from the provided URL.
     :param url: The Quizlet URL to scrape
+    :param username: The user name needed to authenticate to quizlet
+    :param password: The password needed to authenticate to quizlet
     :return: a list of flashcards, None if an error is encountered.
     """
     with init_chrome_webdriver() as driver:
+        authenticate_to_quizlet(driver, username, password)
         driver.get(url)
+
+        wait = WebDriverWait(driver, 10)
+
         site_element = driver.find_element_by_id('setPageSetDetails')
         actions = ActionChains(driver)
         actions.move_to_element(site_element).perform()
 
-        wait = WebDriverWait(driver, 10)
-        terms_list_element = wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//section[@class='SetPageTerms-termsList']")))
+        terms_list_element = get_elem_wait_by_xpath(wait, "//section[@class='SetPageTerms-termsList']")
         terms = terms_list_element.find_elements_by_class_name('SetPageTerms-term')
         return [_process_term_element(term) for term in terms]
 
@@ -58,6 +61,7 @@ def _process_term_element(term: WebElement) -> Flashcard:
 def _process_small_side_elem(small_side_elem: WebElement) -> str:
     """Processes the small side web element, which is the initial side with text on it"""
     text_elem = small_side_elem.find_element_by_xpath('./div/a/span')
+    print(text_elem.text)
     return text_elem.text
 
 
@@ -122,6 +126,10 @@ def authenticate_to_quizlet(driver: WebDriver, username: str, password: str) -> 
 
     authenticate_button = get_elem_wait_by_xpath(wait, '//button[@type="submit" and @aria-label="Log in"]')
     authenticate_button.click()
+
+    wait.until(
+        EC.url_matches("{}/latest".format(QUIZLET_HOME_PAGE))
+    )
 
 
 def get_elem_wait_by_xpath(wait: WebDriverWait, xpath_cond: str) -> WebElement:
