@@ -54,16 +54,12 @@ def _process_term_element(term: WebElement) -> Flashcard:
 def _process_small_side_elem(small_side_elem: WebElement) -> str:
     """Processes the small side web element, which is the initial side with text on it"""
     text_elem = small_side_elem.find_element_by_xpath('./div/a/span')
-    print(text_elem.text)
     return text_elem.text
 
 
 def _process_large_side_elem(large_side_elem: WebElement) -> str:
     """Processes the large side web element, which includes the definition and possibly an image"""
     # TODO: Add support for images on larger card side
-    # side_content_elem = large_side_elem.find_element_by_xpath('./div')
-    # definition_elem = side_content_elem.find_element_by_class_name('SetPageTerm-definitionText')
-    print(large_side_elem.text)
     definition_elem = large_side_elem.find_element_by_xpath(".//a[@class='SetPageTerm-definitionText']")
     text_elem = definition_elem.find_element_by_xpath('./span')
     return text_elem.text
