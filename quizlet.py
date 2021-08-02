@@ -1,5 +1,6 @@
 import os
-import typing
+from typing import Optional
+from dataclasses import dataclass
 import requests
 import tempfile
 from typing import List
@@ -18,12 +19,12 @@ Represents logic for handling interactions with Quizlet.
 QUIZLET_HOME_PAGE = "https://quizlet.com"
 
 
+@dataclass
 class Flashcard:
     """A quizlet flashcard. Each flashcard contains a front and back side."""
-    def __init__(self, front=None, back=None, back_image_path=None):
-        self.front = front
-        self.back = back
-        self.back_image_path = back_image_path
+    front: str
+    back: str
+    back_image_path: Optional[str]
 
 
 def scrape_quizlet_flashcards(url: str, username: str, password: str) -> List[Flashcard]:
@@ -72,7 +73,7 @@ def _process_small_side_elem(small_side_elem: WebElement) -> str:
     return text_elem.text
 
 
-def _process_large_side_elem(large_side_elem: WebElement, user_agent: str) -> (str, typing.Optional[str]):
+def _process_large_side_elem(large_side_elem: WebElement, user_agent: str) -> (str, Optional[str]):
     """Processes the large side web element, which includes the definition and possibly an image"""
     definition_text = _process_definition_text_elem(large_side_elem)
     image_file_path = _download_image(large_side_elem, user_agent)
@@ -90,7 +91,7 @@ def _image_exists(large_side_elem: WebElement) -> bool:
     return len(large_side_elem.find_elements_by_xpath('.//img')) > 0
 
 
-def _download_image(large_side_elem: WebElement, user_agent: str) -> typing.Optional[str]:
+def _download_image(large_side_elem: WebElement, user_agent: str) -> Optional[str]:
     if not _image_exists(large_side_elem):
         return None
 
