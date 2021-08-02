@@ -1,4 +1,7 @@
-import urllib.request
+import os
+import typing
+import requests
+import tempfile
 from typing import List
 
 from selenium import webdriver
@@ -17,9 +20,10 @@ QUIZLET_HOME_PAGE = "https://quizlet.com"
 
 class Flashcard:
     """A quizlet flashcard. Each flashcard contains a front and back side."""
-    def __init__(self, front=None, back=None):
+    def __init__(self, front=None, back=None, back_image_path=None):
         self.front = front
         self.back = back
+        self.back_image_path = back_image_path
 
 
 def scrape_quizlet_flashcards(url: str, username: str, password: str) -> List[Flashcard]:
@@ -40,39 +44,39 @@ def scrape_quizlet_flashcards(url: str, username: str, password: str) -> List[Fl
         actions = ActionChains(driver)
         actions.move_to_element(site_element).perform()
 
+        user_agent = driver.execute_script('return navigator.userAgent')
         terms_list_element = get_elem_wait_by_xpath(wait, "//section[@class='SetPageTerms-termsList']")
         terms = terms_list_element.find_elements_by_class_name('SetPageTerms-term')
-        return [_process_term_element(term) for term in terms]
+        return [_process_term_element(term, user_agent) for term in terms]
 
 
-def _process_term_element(term: WebElement) -> Flashcard:
+def _process_term_element(term: WebElement, user_agent: str) -> Flashcard:
     """
     Helper that makes the HTTP GET request and retrieves the actual text from the quizlet URL
-    :param url:
+    :param term: The web element that contains all the information about the flashcard
+    :param user_agent: A string represent the user agent that the Selenium driver is using
     :return: A string containing all the flashcard data
     """
-    # flash_card_elem = term.find_element_by_xpath('./div/div/div[2]/div')
     flash_card_elem = term.find_element_by_xpath('.//div[@class="SetPageTerm-content"]')
     small_side_elem = flash_card_elem.find_element_by_xpath('./div[@class="SetPageTerm-side SetPageTerm-smallSide"]')
     large_side_elem = flash_card_elem.find_element_by_xpath('./div[@class="SetPageTerm-side SetPageTerm-largeSide"]')
-    return Flashcard(front=_process_small_side_elem(small_side_elem), back=_process_large_side_elem(large_side_elem))
+    back, back_image_path = _process_large_side_elem(large_side_elem, user_agent)
+    return Flashcard(front=_process_small_side_elem(small_side_elem),
+                     back=back,
+                     back_image_path=back_image_path)
 
 
 def _process_small_side_elem(small_side_elem: WebElement) -> str:
     """Processes the small side web element, which is the initial side with text on it"""
     text_elem = small_side_elem.find_element_by_xpath('./div/a/span')
-    print(text_elem.text)
     return text_elem.text
 
 
-def _process_large_side_elem(large_side_elem: WebElement) -> str:
+def _process_large_side_elem(large_side_elem: WebElement, user_agent: str) -> (str, typing.Optional[str]):
     """Processes the large side web element, which includes the definition and possibly an image"""
-    # TODO: Add support for images on larger card side
     definition_text = _process_definition_text_elem(large_side_elem)
-    # image_file_path = _download_image(large_side_elem)
-    print(definition_text)
-    # print(image_file_path)
-    return definition_text
+    image_file_path = _download_image(large_side_elem, user_agent)
+    return definition_text, image_file_path
 
 
 def _process_definition_text_elem(large_side_elem: WebElement) -> str:
@@ -82,12 +86,25 @@ def _process_definition_text_elem(large_side_elem: WebElement) -> str:
     return text_elem.text
 
 
-def _download_image(large_side_elem: WebElement) -> str:
-    img = large_side_elem.find_element_by_xpath('//img[@class="ZoomableImage-rawImage SetPageTerm-image"]')
+def _image_exists(large_side_elem: WebElement) -> bool:
+    return len(large_side_elem.find_elements_by_xpath('.//img')) > 0
+
+
+def _download_image(large_side_elem: WebElement, user_agent: str) -> typing.Optional[str]:
+    if not _image_exists(large_side_elem):
+        return None
+
+    img = large_side_elem.find_element_by_xpath('.//img')
     src = img.get_attribute('src')
 
-    filepath, _ = urllib.request.urlretrieve(src)
-    return filepath
+    resp = requests.get(src, headers={'User-Agent': user_agent})
+    if resp.status_code != 200:
+        raise ValueError("Could not download image")
+
+    (fd, file_name) = tempfile.mkstemp()
+    with os.fdopen(fd, 'wb') as f:
+        f.write(resp.content)
+    return file_name
 
 
 def init_chrome_webdriver() -> WebDriver:
